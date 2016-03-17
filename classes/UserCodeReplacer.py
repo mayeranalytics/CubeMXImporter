@@ -1,17 +1,19 @@
 #!/usr/bin/env python
-""" Class UserCodeReplacer. """
+"""Class UserCodeReplacer."""
 
 import os
-import argparse
 import sys
 import re
 from collections import OrderedDict
 
 
 class UserCodeReplacer:
-    """ For now, this class does two things:
-        - It parses the eclipse path, extracts and stores the user code
-        - It prints the user code for each section for each file
+    """This class extracts and replaces user code in STM32CubeMX projects.
+
+    Specifically, it can do the following two things:
+    - Parse the file tree of an Eclipse project, extract and store
+      the user code
+    - Parse the file tree of an Eclipse project an re-insert the user code
     """
 
     filetypes = set(['.c', '.cpp', '.cxx', '.cc', '.h', '.hpp', '.hxx', '.hh'])
@@ -20,12 +22,16 @@ class UserCodeReplacer:
     __re_empty_text = re.compile(r'^\s*$')
 
     def __init__(self, args):
+        """Init the class, extract some params from args."""
         self.eclipse_path = args.eclipse_path
 
     @staticmethod
     def dir_walker(path):
-        """ Iterate through all the files under path having an extension
-            given in UserCodeReplacer.filetypes """
+        """Iterator over all the files under path having suitable extension.
+
+        Specifically, it iterates over all files with filetype in
+        UserCodeReplacer.filetypes
+        """
         for subdir, dirs, files in os.walk(path):
             for fname in files:
                 fpath = os.path.join(subdir, fname)
@@ -34,9 +40,11 @@ class UserCodeReplacer:
 
     @staticmethod
     def make_backup_fpath(fpath):
-        """ Return a file path that is a good name for a backup file. I.e.
-            the path /x/y/some.c will turn into /x/y/.some.c.1, unless that file
-            already exists. In that case it will turn into /x/y/.some.c.2, etc.
+        """Return a file path that is a good name for a backup file.
+
+        I.e. the path /x/y/some.c will turn into /x/y/.some.c.1,
+        unless that file already exists. In that case it will turn into
+        /x/y/.some.c.2. Etc.
         """
         while os.path.isfile(fpath):
             head, tail = os.path.split(fpath)
@@ -55,6 +63,13 @@ class UserCodeReplacer:
         return fpath
 
     def parse(self):
+        """Do the parse as advertised.
+
+        I.e. go through all the files in the Eclipse project dir and
+        extract the user code.
+        :returns: OrderedDict file_path => section_map where section_map is a
+            OrderedDict of section_name => user_code.
+        """
         all_user_code = OrderedDict()       # a map filename->__parse() result
         for fpath in UserCodeReplacer.dir_walker(self.eclipse_path):
             parse_result = self.__parse(fpath)
@@ -63,7 +78,21 @@ class UserCodeReplacer:
         return all_user_code
 
     def insert(self, all_user_code, do_backup=True):
-        all_files = [fpath for fpath in UserCodeReplacer.dir_walker(self.eclipse_path) if fpath in all_user_code]
+        """Do the re-insert as advertised.
+
+        I.e. go through all the files in the Eclipse project dir and insert
+        the user code in the right section in the right file.
+        Backups will be done on all files that have user code in them.
+        (See the make_backup_fpath function for details on how the filename
+        is constructed.)
+        :param all_user_code: The dict returned by parse()
+        :param do_backup: Bool to switch the backup feature on/off.
+            Default is on.
+        """
+        all_files = [
+            fpath for fpath in UserCodeReplacer.dir_walker(self.eclipse_path)
+            if fpath in all_user_code
+            ]
         for fpath in all_files:
             new_file_content = self.__parse(fpath, all_user_code[fpath])
             if do_backup:
@@ -78,16 +107,20 @@ class UserCodeReplacer:
                 sys.stderr.write("Inserted into {}\n".format(fpath))
 
     def __parse(self, fname, user_code_map=None):
-        """ This function does the parsing. There are two modes:
-            1. Parse: When user_code_map==None the file is parsed and the
-                user_code_map is returned.
-            2. Insert: When user_code_map not None the file is parsed and
-                the new file content is built up by inserting the user code
-                stored in user_code_map. The resulting new file content is returned.
+        """Do the actual parsing/inserting.
+
+        This function will be called by parse() and insert().
+        So there are two modes:
+        1. Parse: When user_code_map==None the file is parsed and the
+            user_code_map is returned.
+        2. Insert: When user_code_map is not None the file is parsed and
+            the new file content is built up by inserting the user code
+            stored in user_code_map. The resulting new file content is
+            returned.
         """
         file = open(fname, 'r')
 
-        do_insert = user_code_map is not None       # this bool identifies the mode
+        do_insert = user_code_map is not None   # this bool identifies the mode
         if user_code_map is None:
             # user_code_map will be a dict of section_name => user_code
             user_code_map = OrderedDict()
@@ -98,9 +131,9 @@ class UserCodeReplacer:
         line_no_start = None        # line no where the current section started
         begin_section_name = None
         end_section_name = None
-        previous_begin_section_name = None    # store the previous section name for reporting errors
+        previous_begin_section_name = None   # previous section name for errors
         this_user_code = ''
-        new_file_content = ''       # only actually needed when do_insert == True
+        new_file_content = ''    # only actually needed when do_insert == True
 
         for line in file:
             line_no += 1
@@ -109,7 +142,7 @@ class UserCodeReplacer:
             re_end = UserCodeReplacer.__re_user_code_end.match(line)
 
             if re_begin is not None and re_end is not None:
-                # safety feature. Let's test for it although it should never happen
+                # Let's test for it although it should never happen
                 sys.stderr.write("Internal Error!\n")
                 sys.exit(1)
 
@@ -119,12 +152,16 @@ class UserCodeReplacer:
             # 3. the line is a /* USER CODE END <section_name> */ line
             # 4. the line contains the system code
 
-            if re_begin is not None:    # case 1: /* USER CODE BEGIN <section_name> */
+            if re_begin is not None:
+                # case 1: /* USER CODE BEGIN <section_name> */
                 previous_begin_section_name = begin_section_name
                 begin_section_name = re_begin.group(1)
                 if state != 'sys':
-                    sys.stderr.write("Error in {} line {}: 'USER CODE BEGIN {}' inside 'USER CODE BEGIN {}'\n".format(
-                        fname, line_no, begin_section_name, previous_begin_section_name
+                    sys.stderr.write(
+                        "Error in {} line {}: 'USER CODE BEGIN {}' \
+                        inside 'USER CODE BEGIN {}'\n".format(
+                            fname, line_no, begin_section_name,
+                            previous_begin_section_name
                         ))
                     sys.exit(1)
                 else:
@@ -134,19 +171,25 @@ class UserCodeReplacer:
                     line_no_start = line_no
                     end_section_name = None
 
-            elif re_end is not None:    # case 3: /* USER CODE END <section_name> */
+            elif re_end is not None:
+                # case 3: /* USER CODE END <section_name> */
                 end_section_name = re_end.group(1)
                 if state != 'user' or end_section_name != begin_section_name:
-                    sys.stderr.write("Error in {} line {}: 'USER CODE END {}' not preceded by 'USER CODE BEGIN {}'\n".format(
-                        fname, line_no, end_section_name, end_section_name
+                    sys.stderr.write(
+                        "Error in {} line {}: 'USER CODE END {}' \
+                        not preceded by 'USER CODE BEGIN {}'\n".format(
+                            fname, line_no, end_section_name, end_section_name
                         ))
                     sys.exit(1)
                 else:
-                    if UserCodeReplacer.__re_empty_text.match(this_user_code) is None:
+                    if UserCodeReplacer.__re_empty_text.match(
+                        this_user_code
+                    ) is None:
                         if do_insert:
                             pass
                         else:
-                            user_code_map[end_section_name] = [this_user_code, line_no_start]
+                            user_code_map[end_section_name] = \
+                                [this_user_code, line_no_start]
 
                     new_file_content += this_user_code
                     new_file_content += line
