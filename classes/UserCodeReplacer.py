@@ -46,7 +46,7 @@ class UserCodeReplacer:
         unless that file already exists. In that case it will turn into
         /x/y/.some.c.2. Etc.
         """
-        while os.path.isfile(fpath):
+        while True:
             head, tail = os.path.split(fpath)
             fname, ext = os.path.splitext(tail)
             ext = ext.lstrip('.')
@@ -60,6 +60,8 @@ class UserCodeReplacer:
             if fname[0] != '.':
                 fname = "." + fname
             fpath = os.path.join(head, fname+"."+ext)
+            if not os.path.isfile(fpath):
+                break
         return fpath
 
     def parse(self):
@@ -105,6 +107,15 @@ class UserCodeReplacer:
             with open(fpath, 'w') as file:
                 file.write(new_file_content)
                 sys.stderr.write("Inserted into {}\n".format(fpath))
+            del all_user_code[fpath]
+        # if there's still something left in all_user_code we write it again:
+        for fpath in all_user_code:
+            with open(fpath, 'w') as file:
+                for section_name, (user_code, lineno) in all_user_code[fpath].iteritems():
+                    file.write("/* USER CODE BEGIN {} */\n".format(section_name))
+                    file.write(user_code)
+                    file.write("/* USER CODE END {} */\n".format(section_name))
+            print "Wrote user section(s) to {}".format(fpath)
 
     def __parse(self, fname, user_code_map=None):
         """Do the actual parsing/inserting.
@@ -132,7 +143,7 @@ class UserCodeReplacer:
         begin_section_name = None
         end_section_name = None
         previous_begin_section_name = None   # previous section name for errors
-        this_user_code = ''
+        current_section_user_code = ''
         new_file_content = ''    # only actually needed when do_insert == True
 
         for line in file:
@@ -168,6 +179,7 @@ class UserCodeReplacer:
                     new_file_content += line
                     # change state variables
                     state = 'user'
+                    current_section_user_code = ''
                     line_no_start = line_no
                     end_section_name = None
 
@@ -183,25 +195,28 @@ class UserCodeReplacer:
                     sys.exit(1)
                 else:
                     if UserCodeReplacer.__re_empty_text.match(
-                        this_user_code
+                        current_section_user_code
                     ) is None:
                         if do_insert:
-                            pass
+                            inserted_text, inserted_lineno = user_code_map[end_section_name]
+                            new_file_content += inserted_text
+                            print("{}:{} Inserted USER CODE '{}'".format(fname, inserted_lineno, end_section_name))
                         else:
                             user_code_map[end_section_name] = \
-                                [this_user_code, line_no_start]
+                                (current_section_user_code, line_no_start)
 
-                    new_file_content += this_user_code
+                    elif do_insert:
+                        new_file_content += current_section_user_code
                     new_file_content += line
                     # reset all state variables
                     state = 'sys'
                     end_section_name = begin_section_name = None
-                    this_user_code = ''
+                    current_section_user_code = ''
                     line_no_start = None
 
             else:
                 if state == 'user':     # case 2: It's user code in between
-                    this_user_code += line
+                    current_section_user_code += line
                 else:                   # case 4: It's sys code
                     new_file_content += line
                 continue

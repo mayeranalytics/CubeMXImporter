@@ -53,9 +53,13 @@ optional arguments:
 
 
 ## Caveats ##
-* <aside class="warning">Source code outside the BEGIN-END structures will not be saved!</aside>
-* <aside class="warning">The backup feature may save you some trouble but it is not 100% failsafe. E.g. source files that don't have any user code sections will not be backed up.</aside>
-* 
+* Source code outside the BEGIN-END structures will not be saved!
+* During processing all files in the src/ and include/ folders (and others) will be deleted by cubemximporter.
+  This means if you add your own file to src/, for example, it will be deleted by cubemximporter. 
+  If you want to avoid this use the --insert option and enclose **the whole file** in 
+  `/* USER CODE BEGIN <something> */` and `/* USER CODE END <something> */`. Alternatively use another directory
+   for your source code files.
+* The backup feature may save you some trouble but it is not 100% failsafe. E.g. source files that don't have any user code sections will not be backed up.
 
 ## Todo ##
 * More test
