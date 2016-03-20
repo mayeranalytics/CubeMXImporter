@@ -20,9 +20,15 @@ The extension scans all files for sections like these, save the source code insi
 ## Details ##
 The normal function of `cubemximport.py` is sandwiched between two actions of the extension:
 
-1. All the files in `eclipse_project_folder` having extensions `.c`, `.cpp`, `.cxx`, `.cc`, `.h`, `.hpp`, `.hxx`, `.hh` are scanned and the source code inside the user code sections is extracted.
-2. Files are copied from the `cubemx_project_folder` to `eclipse_project_folder` in the usual way. Most of the files under `eclipse_project_folder` will be overwritten.
+1. All the files in `eclipse_project_folder` having extensions `.c`, `.cpp`, `.cxx`, `.cc`, `.h`, `.hpp`, `.hxx`, `.hh` 
+   are scanned and the source code inside the user code sections is extracted.
+2. Files are copied from the `cubemx_project_folder` to `eclipse_project_folder` in the usual way. 
+   Most of the files under `eclipse_project_folder`, in particular `src/`, `include/`, will be deleted and
+   replace by the STM32CubeMX product. 
 3. The extracted user code sections are reinserted in the appropriate places in the files under `eclipse_project_folder`.
+   If the user added a file **that is not produced by STM32CubeMX** to, for example `src/`, then the file will 
+   be recreated **if** it contains at least one user code section. 
+   But in any case code outside user code sections will be always lost!
 
 ## Usage ##
 ```
@@ -31,7 +37,7 @@ usage: cubemximporter.py [-h] [-v VERBOSE] [--dryrun] [--dump] [--insert]
                          eclipse_project_folder cubemx_project_folder
 
 Import a STM32CubeMX generated project inside an existing Eclipse project
-generated with the GNU ARM plugin
+generated with the GNU ARM plugin. 
 
 positional arguments:
   eclipse_project_folder
