@@ -24,14 +24,10 @@ from __future__ import print_function
 
 version = 0.2
 
-import os
+import re
 import sys
 import argparse
-import copy
 import logging
-import shutil
-import re
-from lxml import etree
 from classes.CubeMXImporter import CubeMXImporter
 from classes.UserCodeReplacer import UserCodeReplacer
 
@@ -89,7 +85,8 @@ if __name__ == "__main__":
                 print(make_header(fname))
                 for section_name, (user_code, line_no) in user_code_map.iteritems():
                     print(">{}: USER CODE '{}'".format(line_no, section_name))
-                    sys.stdout.write(user_code)
+                    if re.match("^\s*$", user_code) is None:
+                        sys.stdout.write(user_code)
 
     cubeImporter =  CubeMXImporter()
     cubeImporter.setDryRun(args.dryrun)

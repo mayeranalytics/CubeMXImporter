@@ -102,7 +102,7 @@ class UserCodeReplacer:
                 backup_fpath = UserCodeReplacer.make_backup_fpath(fpath)
                 # make a backup of the file by renming it
                 os.rename(fpath, backup_fpath)
-                sys.stderr.write("{} -> {}\n".format(fpath, backup_fpath))
+                sys.stderr.write("Renamed {} -> {}\n".format(fpath, backup_fpath))
             # now we overwrite the file!!
             with open(fpath, 'w') as file:
                 file.write(new_file_content)
@@ -115,7 +115,7 @@ class UserCodeReplacer:
                     file.write("/* USER CODE BEGIN {} */\n".format(section_name))
                     file.write(user_code)
                     file.write("/* USER CODE END {} */\n".format(section_name))
-            print "Wrote user section(s) to {}".format(fpath)
+            print("Wrote user section(s) to {}".format(fpath))
 
     def __parse(self, fname, user_code_map=None):
         """Do the actual parsing/inserting.
@@ -186,6 +186,7 @@ class UserCodeReplacer:
             elif re_end is not None:
                 # case 3: /* USER CODE END <section_name> */
                 end_section_name = re_end.group(1)
+
                 if state != 'user' or end_section_name != begin_section_name:
                     sys.stderr.write(
                         "Error in {} line {}: 'USER CODE END {}' \
@@ -193,26 +194,25 @@ class UserCodeReplacer:
                             fname, line_no, end_section_name, end_section_name
                         ))
                     sys.exit(1)
-                else:
-                    if UserCodeReplacer.__re_empty_text.match(
-                        current_section_user_code
-                    ) is None:
-                        if do_insert:
-                            inserted_text, inserted_lineno = user_code_map[end_section_name]
-                            new_file_content += inserted_text
-                            print("{}:{} Inserted USER CODE '{}'".format(fname, inserted_lineno, end_section_name))
-                        else:
-                            user_code_map[end_section_name] = \
-                                (current_section_user_code, line_no_start)
 
-                    elif do_insert:
-                        new_file_content += current_section_user_code
-                    new_file_content += line
-                    # reset all state variables
-                    state = 'sys'
-                    end_section_name = begin_section_name = None
-                    current_section_user_code = ''
-                    line_no_start = None
+                if do_insert:
+                    inserted_text, inserted_lineno = user_code_map.get(end_section_name, (None, None))
+                    if inserted_text is not None:
+                        del user_code_map[end_section_name]
+                        new_file_content += inserted_text
+                        if re.match("^\s*$", inserted_text) is None:
+                            print("{}:{} Inserted USER CODE '{}'".format(fname, inserted_lineno, end_section_name))
+                    else:
+                        print("{}: Error: Section name '{}' not found".format(fname, end_section_name))
+                else:
+                    user_code_map[end_section_name] = \
+                        (current_section_user_code, line_no_start)
+                new_file_content += line
+                # reset all state variables
+                state = 'sys'
+                end_section_name = begin_section_name = None
+                current_section_user_code = ''
+                line_no_start = None
 
             else:
                 if state == 'user':     # case 2: It's user code in between
@@ -222,5 +222,10 @@ class UserCodeReplacer:
                 continue
 
         file.close()
+        # report any un-inserted user sections:
+        if do_insert:
+            for section_name, (text, line_no) in user_code_map.iteritems():
+                print("{}:{} NOT Inserted USER CODE '{}'".format(fname, inserted_lineno, section_name))
+
         # recall that the return type is different for the two parsing modes
         return new_file_content if do_insert else user_code_map
